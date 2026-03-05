@@ -235,19 +235,18 @@ VanitySearch::VanitySearch(Secp256K1 *secp, vector<std::string> &inputPrefixes,s
     // Wild card search
     switch (inputPrefixes[0].data()[0]) {
 
-    case '1':
+    case 'L':
       searchType = P2PKH;
       break;
-    case '3':
+    case 'M':
       searchType = P2SH;
       break;
-    case 'b':
-    case 'B':
+    case 'l':
       searchType = BECH32;
       break;
 
     default:
-      printf("Invalid start character 1,3 or b, expected");
+      printf("Invalid start character L, M or l (ltc1), expected");
       exit(1);
 
     }
@@ -323,9 +322,12 @@ VanitySearch::VanitySearch(Secp256K1 *secp, vector<std::string> &inputPrefixes,s
 
 bool VanitySearch::isSingularPrefix(std::string pref) {
 
-  // check is the given prefix contains only 1
+  // check if the given prefix is singular (first char is the version prefix, rest are '1's)
+  if (pref.length() < 2) return false;
+  // For Litecoin P2PKH, first char is 'L'; for P2SH, first char is 'M'
+  // The remaining characters should all be '1' (representing zero hash bytes)
   bool only1 = true;
-  int i=0;
+  int i = 1;
   while (only1 && i < (int)pref.length()) {
     only1 = pref.data()[i] == '1';
     i++;
@@ -351,22 +353,21 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
 
 
   switch (prefix.data()[0]) {
-  case '1':
+  case 'L':
     aType = P2PKH;
     break;
-  case '3':
+  case 'M':
     aType = P2SH;
     break;
-  case 'b':
-  case 'B':
+  case 'l':
     std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
-    if(strncmp(prefix.c_str(), "bc1q", 4) == 0)
+    if(strncmp(prefix.c_str(), "ltc1q", 5) == 0)
       aType = BECH32;
     break;
   }
 
   if (aType==-1) {
-    printf("Ignoring prefix \"%s\" (must start with 1 or 3 or bc1q)\n", prefix.c_str());
+    printf("Ignoring prefix \"%s\" (must start with L or M or ltc1q)\n", prefix.c_str());
     return false;
   }
 
@@ -382,7 +383,7 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
     uint8_t witprog[40];
     size_t witprog_len;
     int witver;
-    const char* hrp = "bc";
+    const char* hrp = "ltc";
 
     int ret = segwit_addr_decode(&witver, witprog, &witprog_len, hrp, prefix.c_str());
 
@@ -401,27 +402,27 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
 
     }
 
-    if (prefix.length() < 5) {
-      printf("Ignoring prefix \"%s\" (too short, length<5 )\n", prefix.c_str());
+    if (prefix.length() < 6) {
+      printf("Ignoring prefix \"%s\" (too short, length<6 )\n", prefix.c_str());
       return false;
     }
 
-    if (prefix.length() >= 36) {
-      printf("Ignoring prefix \"%s\" (too long, length>36 )\n", prefix.c_str());
+    if (prefix.length() >= 47) {
+      printf("Ignoring prefix \"%s\" (too long, length>=47 )\n", prefix.c_str());
       return false;
     }
 
     uint8_t data[64];
     memset(data,0,64);
     size_t data_length;
-    if(!bech32_decode_nocheck(data,&data_length,prefix.c_str()+4)) {
+    if(!bech32_decode_nocheck(data,&data_length,prefix.c_str()+5)) {
       printf("Ignoring prefix \"%s\" (Only \"023456789acdefghjklmnpqrstuvwxyz\" allowed)\n", prefix.c_str());
       return false;
     }
 
     // Difficulty
     it->sPrefix = *(prefix_t *)data;
-    it->difficulty = pow(2, 5*(prefix.length()-4));
+    it->difficulty = pow(2, 5*(prefix.length()-5));
     it->isFull = false;
     it->lPrefix = 0;
     it->prefix = (char *)prefix.c_str();
@@ -489,9 +490,9 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
     }
 
     if (searchType == P2SH) {
-      if (result.data()[0] != 5) {
+      if (result.data()[0] != 0x32) {
         if(caseSensitive)
-          printf("Ignoring prefix \"%s\" (Unreachable, 31h1 to 3R2c only)\n", prefix.c_str());
+          printf("Ignoring prefix \"%s\" (Unreachable prefix for Litecoin P2SH)\n", prefix.c_str());
         return false;
       }
     }

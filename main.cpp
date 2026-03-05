@@ -25,7 +25,7 @@
 #include "hash/sha512.h"
 #include "hash/sha256.h"
 
-#define RELEASE "1.19"
+#define RELEASE "1.19-LTC"
 
 using namespace std;
 
@@ -33,7 +33,7 @@ using namespace std;
 
 void printUsage() {
 
-  printf("VanitySeacrh [-check] [-v] [-u] [-b] [-c] [-gpu] [-stop] [-i inputfile]\n");
+  printf("LTCVanitySearch [-check] [-v] [-u] [-b] [-c] [-gpu] [-stop] [-i inputfile]\n");
   printf("             [-gpuId gpuId1[,gpuId2,...]] [-g g1x,g1y,[,g2x,g2y,...]]\n");
   printf("             [-o outputfile] [-m maxFound] [-ps seed] [-s seed] [-t nbThread]\n");
   printf("             [-nosse] [-r rekey] [-check] [-kp] [-sp startPubKey]\n");
@@ -272,12 +272,11 @@ void reconstructAdd(Secp256K1 *secp, string fileName, string outputFile, string 
       addr = lines[i].substr(12);
 
       switch (addr.data()[0]) {
-      case '1':
+      case 'L':
         addrType = P2PKH; break;
-      case '3':
+      case 'M':
         addrType = P2SH; break;
-      case 'b':
-      case 'B':
+      case 'l':
         addrType = BECH32; break;
       default:
         printf("Invalid partialkey info file at line %d\n", i);
@@ -467,7 +466,7 @@ int main(int argc, char* argv[]) {
       string priv = string(argv[a]);
       Int k;
       bool isComp = true;
-      if(priv[0]=='5' || priv[0] == 'K' || priv[0] == 'L') {
+      if(priv[0]=='6' || priv[0] == 'T') {
         k = secp->DecodePrivateKey((char *)priv.c_str(),&isComp);
       } else {
         k.SetBase16(argv[a]);
@@ -542,7 +541,7 @@ int main(int argc, char* argv[]) {
 
   }
 
-  printf("VanitySearch v" RELEASE "\n");
+  printf("LTCVanitySearch v" RELEASE "\n");
 
   if(gridSize.size()==0) {
     for (int i = 0; i < gpuId.size(); i++) {

@@ -139,23 +139,23 @@ int _ConvertSMVer2Cores(int major, int minor) {
   } sSMtoCores;
 
   sSMtoCores nGpuArchCoresPerSM[] = {
-      {0x20, 32}, // Fermi Generation (SM 2.0) GF100 class
-      {0x21, 48}, // Fermi Generation (SM 2.1) GF10x class
-      {0x30, 192},
-      {0x32, 192},
-      {0x35, 192},
-      {0x37, 192},
-      {0x50, 128},
-      {0x52, 128},
-      {0x53, 128},
-      {0x60,  64},
-      {0x61, 128},
-      {0x62, 128},
-      {0x70,  64},
-      {0x72,  64},
-      {0x75,  64},
-      {0x80,  64},
-      {0x86, 128},
+      {0x50, 128}, // Maxwell
+      {0x52, 128}, // Maxwell
+      {0x53, 128}, // Maxwell
+      {0x60,  64}, // Pascal
+      {0x61, 128}, // Pascal
+      {0x62, 128}, // Pascal
+      {0x70,  64}, // Volta
+      {0x72,  64}, // Volta
+      {0x75,  64}, // Turing
+      {0x80,  64}, // Ampere GA100
+      {0x86, 128}, // Ampere GA10x
+      {0x87, 128}, // Ampere (Jetson Orin)
+      {0x89, 128}, // Ada Lovelace
+      {0x90, 128}, // Hopper
+      {0xa0, 128}, // Blackwell (B200/B100)
+      {0xa1, 128}, // Blackwell
+      {0xc0, 128}, // Blackwell (RTX 50 series)
       {-1, -1} };
 
   int index = 0;
