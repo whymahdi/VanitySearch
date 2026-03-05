@@ -213,21 +213,18 @@ private:
 
 #ifndef WIN64
 
-// Missing intrinsics
+// Missing intrinsics — use __int128 instead of GCC builtins for carry chains,
+// as __builtin_ia32_addcarryx_u64/__builtin_ia32_sbb_u64 miscompile at -O2.
 static uint64_t inline _umul128(uint64_t a, uint64_t b, uint64_t *h) {
-  uint64_t rhi;
-  uint64_t rlo;
-  __asm__( "mulq  %[b];" :"=d"(rhi),"=a"(rlo) :"1"(a),[b]"rm"(b));
-  *h = rhi;
-  return rlo;
+  unsigned __int128 r = (unsigned __int128)a * b;
+  *h = (uint64_t)(r >> 64);
+  return (uint64_t)r;
 }
 
 static int64_t inline _mul128(int64_t a, int64_t b, int64_t *h) {
-  uint64_t rhi;
-  uint64_t rlo;
-  __asm__( "imulq  %[b];" :"=d"(rhi),"=a"(rlo) :"1"(a),[b]"rm"(b));
-  *h = rhi;
-  return rlo;  
+  __int128 r = (__int128)a * b;
+  *h = (int64_t)(r >> 64);
+  return (int64_t)r;
 }
 
 static uint64_t inline _udiv128(uint64_t hi, uint64_t lo, uint64_t d,uint64_t *r) {
@@ -235,7 +232,7 @@ static uint64_t inline _udiv128(uint64_t hi, uint64_t lo, uint64_t d,uint64_t *r
   uint64_t _r;
   __asm__( "divq  %[d];" :"=d"(_r),"=a"(q) :"d"(hi),"a"(lo),[d]"rm"(d));
   *r = _r;
-  return q;  
+  return q;
 }
 
 static uint64_t inline __rdtsc() {
@@ -248,9 +245,18 @@ static uint64_t inline __rdtsc() {
 #define __shiftright128(a,b,n) ((a)>>(n))|((b)<<(64-(n)))
 #define __shiftleft128(a,b,n) ((b)<<(n))|((a)>>(64-(n)))
 
+static unsigned char inline _addcarry_u64(unsigned char c, uint64_t a, uint64_t b, uint64_t *result) {
+  unsigned __int128 sum = (unsigned __int128)a + b + c;
+  *result = (uint64_t)sum;
+  return (unsigned char)(sum >> 64);
+}
 
-#define _subborrow_u64(a,b,c,d) __builtin_ia32_sbb_u64(a,b,c,(long long unsigned int*)d);
-#define _addcarry_u64(a,b,c,d) __builtin_ia32_addcarryx_u64(a,b,c,(long long unsigned int*)d);
+static unsigned char inline _subborrow_u64(unsigned char c, uint64_t a, uint64_t b, uint64_t *result) {
+  unsigned __int128 full = (unsigned __int128)a - b - c;
+  *result = (uint64_t)full;
+  return (unsigned char)((full >> 64) != 0);
+}
+
 #define _byteswap_uint64 __builtin_bswap64
 #define LZC(x) __builtin_clzll(x)
 #define TZC(x) __builtin_ctzll(x)
