@@ -213,8 +213,7 @@ private:
 
 #ifndef WIN64
 
-// Missing intrinsics — use __int128 instead of GCC builtins for carry chains,
-// as __builtin_ia32_addcarryx_u64/__builtin_ia32_sbb_u64 miscompile at -O2.
+// Missing intrinsics
 static uint64_t inline _umul128(uint64_t a, uint64_t b, uint64_t *h) {
   unsigned __int128 r = (unsigned __int128)a * b;
   *h = (uint64_t)(r >> 64);
@@ -246,15 +245,31 @@ static uint64_t inline __rdtsc() {
 #define __shiftleft128(a,b,n) ((b)<<(n))|((a)>>(64-(n)))
 
 static unsigned char inline _addcarry_u64(unsigned char c, uint64_t a, uint64_t b, uint64_t *result) {
-  unsigned __int128 sum = (unsigned __int128)a + b + c;
-  *result = (uint64_t)sum;
-  return (unsigned char)(sum >> 64);
+  unsigned char co;
+  __asm__ volatile (
+    "bt $0, %k[c]\n\t"
+    "adc %[b], %[a]\n\t"
+    "setc %[co]"
+    : [a]"+r"(a), [co]"=&r"(co)
+    : [b]"r"(b), [c]"r"((uint32_t)c)
+    : "cc"
+  );
+  *result = a;
+  return co;
 }
 
 static unsigned char inline _subborrow_u64(unsigned char c, uint64_t a, uint64_t b, uint64_t *result) {
-  unsigned __int128 full = (unsigned __int128)a - b - c;
-  *result = (uint64_t)full;
-  return (unsigned char)((full >> 64) != 0);
+  unsigned char bo;
+  __asm__ volatile (
+    "bt $0, %k[c]\n\t"
+    "sbb %[b], %[a]\n\t"
+    "setc %[bo]"
+    : [a]"+r"(a), [bo]"=&r"(bo)
+    : [b]"r"(b), [c]"r"((uint32_t)c)
+    : "cc"
+  );
+  *result = a;
+  return bo;
 }
 
 #define _byteswap_uint64 __builtin_bswap64
