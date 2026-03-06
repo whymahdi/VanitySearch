@@ -56,6 +56,8 @@ endif
 
 #--------------------------------------------------------------------
 
+all: VanitySearch
+
 ifdef gpu
 ifdef debug
 $(OBJDIR)/GPU/GPUEngine.o: GPU/GPUEngine.cu
@@ -68,8 +70,6 @@ endif
 
 $(OBJDIR)/%.o : %.cpp
 	$(CXX) $(CXXFLAGS) -o $@ -c $<
-
-all: VanitySearch
 
 VanitySearch: $(OBJET)
 	@echo Making VanitySearch...
