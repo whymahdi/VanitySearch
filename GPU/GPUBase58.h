@@ -21,6 +21,9 @@
 
 __device__ __constant__ char *pszBase58 = (char *)"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
+__device__ __constant__ uint8_t d_p2pkhVersion = 0x30;
+__device__ __constant__ uint8_t d_p2shVersion = 0x32;
+
 __device__ __constant__ int8_t b58digits_map[] = {
   -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
   -1,-1,-1,-1,-1,-1,-1,-1, -1,-1,-1,-1,-1,-1,-1,-1,
@@ -44,11 +47,11 @@ __device__ __noinline__ void _GetAddress(int type,uint32_t *hash,char *b58Add) {
   switch (type) {
 
   case P2PKH:
-    A[0] = 0x30;
+    A[0] = d_p2pkhVersion;
     break;
 
   case P2SH:
-    A[0] = 0x32;
+    A[0] = d_p2shVersion;
     break;
 
   }

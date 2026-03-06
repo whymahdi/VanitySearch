@@ -16,6 +16,7 @@
 */
 
 #include "SECP256k1.h"
+#include "Coin.h"
 #include "hash/sha256.h"
 #include "hash/ripemd160.h"
 #include "Base58.h"
@@ -77,11 +78,11 @@ void CheckAddress(Secp256K1 *T,std::string address,std::string privKeyStr) {
   Point pub = T->ComputePublicKey(&privKey);
 
   switch (address.data()[0]) {
-  case 'L':
+  case '1': case 'L':
     type = P2PKH; break;
-  case 'M':
+  case '3': case 'M':
     type = P2SH; break;
-  case 'l':
+  case 'b': case 'l':
     type = BECH32; break;
   default:
     printf("Failed ! \n%s Address format not supported\n", address.c_str());
@@ -197,7 +198,7 @@ Int Secp256K1::DecodePrivateKey(char *key,bool *compressed) {
   ret.SetInt32(0);
   std::vector<unsigned char> privKey;
 
-  if(key[0] == '6') {
+  if(key[0] == coinConfig.wifUncompChar) {
 
     // Not compressed
     DecodeBase58(key,privKey);
@@ -207,7 +208,7 @@ Int Secp256K1::DecodePrivateKey(char *key,bool *compressed) {
       return ret;
     }
 
-    if(privKey[0] != 0xB0) {
+    if(privKey[0] != coinConfig.wifVersion) {
       printf("Invalid private key, wrong prefix !\n");
       return ret;
     }
@@ -228,7 +229,7 @@ Int Secp256K1::DecodePrivateKey(char *key,bool *compressed) {
     *compressed = false;
     return ret;
 
-  } else if(key[0] == 'T') {
+  } else if(strchr(coinConfig.wifCompChars, key[0])) {
 
     // Compressed
     DecodeBase58(key,privKey);
@@ -256,7 +257,7 @@ Int Secp256K1::DecodePrivateKey(char *key,bool *compressed) {
 
   }
 
-  printf("Invalid private key, not starting with 6 or T !\n");
+  printf("Invalid private key, not starting with %c or %s !\n", coinConfig.wifUncompChar, coinConfig.wifCompChars);
   ret.SetInt32(-1);
   return ret;
 
@@ -593,7 +594,7 @@ std::string Secp256K1::GetPrivAddress(bool compressed,Int &privKey) {
 
   unsigned char address[38];
 
-  address[0] = 0xB0; // Litecoin Mainnet
+  address[0] = coinConfig.wifVersion;
   privKey.Get32Bytes(address + 1);
 
   if( compressed ) {
@@ -647,29 +648,29 @@ std::vector<std::string> Secp256K1::GetAddress(int type, bool compressed, unsign
   switch (type) {
 
   case P2PKH:
-    add1[0] = 0x30;
-    add2[0] = 0x30;
-    add3[0] = 0x30;
-    add4[0] = 0x30;
+    add1[0] = coinConfig.p2pkhVersion;
+    add2[0] = coinConfig.p2pkhVersion;
+    add3[0] = coinConfig.p2pkhVersion;
+    add4[0] = coinConfig.p2pkhVersion;
     break;
 
   case P2SH:
-    add1[0] = 0x32;
-    add2[0] = 0x32;
-    add3[0] = 0x32;
-    add4[0] = 0x32;
+    add1[0] = coinConfig.p2shVersion;
+    add2[0] = coinConfig.p2shVersion;
+    add3[0] = coinConfig.p2shVersion;
+    add4[0] = coinConfig.p2shVersion;
     break;
 
   case BECH32:
   {
     char output[128];
-    segwit_addr_encode(output, "ltc", 0, h1, 20);
+    segwit_addr_encode(output, coinConfig.bech32Hrp, 0, h1, 20);
     ret.push_back(std::string(output));
-    segwit_addr_encode(output, "ltc", 0, h2, 20);
+    segwit_addr_encode(output, coinConfig.bech32Hrp, 0, h2, 20);
     ret.push_back(std::string(output));
-    segwit_addr_encode(output, "ltc", 0, h3, 20);
+    segwit_addr_encode(output, coinConfig.bech32Hrp, 0, h3, 20);
     ret.push_back(std::string(output));
-    segwit_addr_encode(output, "ltc", 0, h4, 20);
+    segwit_addr_encode(output, coinConfig.bech32Hrp, 0, h4, 20);
     ret.push_back(std::string(output));
     return ret;
   }
@@ -702,17 +703,17 @@ std::string Secp256K1::GetAddress(int type, bool compressed,unsigned char *hash1
   switch(type) {
 
     case P2PKH:
-      address[0] = 0x30;
+      address[0] = coinConfig.p2pkhVersion;
       break;
 
     case P2SH:
-      address[0] = 0x32;
+      address[0] = coinConfig.p2shVersion;
       break;
 
     case BECH32:
     {
       char output[128];
-      segwit_addr_encode(output, "ltc", 0, hash160, 20);
+      segwit_addr_encode(output, coinConfig.bech32Hrp, 0, hash160, 20);
       return std::string(output);
     }
     break;
@@ -732,7 +733,7 @@ std::string Secp256K1::GetAddress(int type, bool compressed, Point &pubKey) {
   switch (type) {
 
   case P2PKH:
-    address[0] = 0x30;
+    address[0] = coinConfig.p2pkhVersion;
     break;
 
   case BECH32:
@@ -743,7 +744,7 @@ std::string Secp256K1::GetAddress(int type, bool compressed, Point &pubKey) {
     char output[128];
     uint8_t h160[20];
     GetHash160(type, compressed, pubKey, h160);
-    segwit_addr_encode(output,"ltc",0,h160,20);
+    segwit_addr_encode(output,coinConfig.bech32Hrp,0,h160,20);
     return std::string(output);
   }
   break;
@@ -752,7 +753,7 @@ std::string Secp256K1::GetAddress(int type, bool compressed, Point &pubKey) {
     if (!compressed) {
       return " P2SH: Only compressed key ";
     }
-    address[0] = 0x32;
+    address[0] = coinConfig.p2shVersion;
     break;
   }
 

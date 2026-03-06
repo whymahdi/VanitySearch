@@ -70,6 +70,7 @@ public:
   int GetGroupSize();
 
   bool Check(Secp256K1 *secp);
+  void SetCoinVersion(uint8_t p2pkh, uint8_t p2sh);
   std::string deviceName;
 
   static void PrintCudaInfo();

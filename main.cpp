@@ -18,6 +18,7 @@
 #include "Timer.h"
 #include "Vanity.h"
 #include "SECP256k1.h"
+#include "Coin.h"
 #include <fstream>
 #include <string>
 #include <string.h>
@@ -25,7 +26,7 @@
 #include "hash/sha512.h"
 #include "hash/sha256.h"
 
-#define RELEASE "1.19-LTC"
+#define RELEASE "1.20"
 
 using namespace std;
 
@@ -33,12 +34,13 @@ using namespace std;
 
 void printUsage() {
 
-  printf("LTCVanitySearch [-check] [-v] [-u] [-b] [-c] [-gpu] [-stop] [-i inputfile]\n");
+  printf("VanitySearch [-check] [-v] [-u] [-b] [-c] [-gpu] [-stop] [-i inputfile]\n");
   printf("             [-gpuId gpuId1[,gpuId2,...]] [-g g1x,g1y,[,g2x,g2y,...]]\n");
   printf("             [-o outputfile] [-m maxFound] [-ps seed] [-s seed] [-t nbThread]\n");
   printf("             [-nosse] [-r rekey] [-check] [-kp] [-sp startPubKey]\n");
-  printf("             [-rp privkey partialkeyfile] [prefix]\n\n");
+  printf("             [-coin btc|ltc] [-rp privkey partialkeyfile] [prefix]\n\n");
   printf(" prefix: prefix to search (Can contains wildcard '?' or '*')\n");
+  printf(" -coin: Select coin (btc or ltc), auto-detected from prefix if not specified\n");
   printf(" -v: Print version\n");
   printf(" -u: Search uncompressed addresses\n");
   printf(" -b: Search both uncompressed or compressed addresses\n");
@@ -272,11 +274,11 @@ void reconstructAdd(Secp256K1 *secp, string fileName, string outputFile, string 
       addr = lines[i].substr(12);
 
       switch (addr.data()[0]) {
-      case 'L':
+      case '1': case 'L':
         addrType = P2PKH; break;
-      case 'M':
+      case '3': case 'M':
         addrType = P2SH; break;
-      case 'l':
+      case 'b': case 'l':
         addrType = BECH32; break;
       default:
         printf("Invalid partialkey info file at line %d\n", i);
@@ -370,10 +372,6 @@ int main(int argc, char* argv[]) {
   Timer::Init();
   rseed(Timer::getSeed32());
 
-  // Init SecpK1
-  Secp256K1 *secp = new Secp256K1();
-  secp->Init();
-
   // Browse arguments
   if (argc < 2) {
     printf("Error: No arguments (use -h for help)\n");
@@ -399,6 +397,15 @@ int main(int argc, char* argv[]) {
   bool startPubKeyCompressed;
   bool caseSensitive = true;
   bool paranoiacSeed = false;
+  bool coinSpecified = false;
+  CoinType coinType = COIN_LTC;
+  bool doCheck = false;
+  bool doKP = false;
+  string spPub = "";
+  string caPub = "";
+  string cpPriv = "";
+  string rpPriv = "";
+  string rpFile = "";
 
   while (a < argc) {
 
@@ -419,22 +426,8 @@ int main(int argc, char* argv[]) {
       printf("%s\n",RELEASE);
       exit(0);
     } else if (strcmp(argv[a], "-check") == 0) {
-
-      Int::Check();
-      secp->Check();
-
-#ifdef WITHGPU
-      if (gridSize.size() == 0) {
-        gridSize.push_back(-1);
-        gridSize.push_back(128);
-      }
-      GPUEngine g(gridSize[0],gridSize[1],gpuId[0],maxFound,false);
-      g.SetSearchMode(searchMode);
-      g.Check(secp);
-#else
-  printf("GPU code not compiled, use -DWITHGPU when compiling.\n");
-#endif
-      exit(0);
+      doCheck = true;
+      a++;
     } else if (strcmp(argv[a], "-l") == 0) {
 
 #ifdef WITHGPU
@@ -445,47 +438,26 @@ int main(int argc, char* argv[]) {
       exit(0);
 
     } else if (strcmp(argv[a], "-kp") == 0) {
-      generateKeyPair(secp,seed,searchMode,paranoiacSeed);
-      exit(0);
+      doKP = true;
+      a++;
     } else if (strcmp(argv[a], "-sp") == 0) {
       a++;
-      string pub = string(argv[a]);
-      startPuKey = secp->ParsePublicKeyHex(pub, startPubKeyCompressed);
+      spPub = string(argv[a]);
       a++;
     } else if(strcmp(argv[a],"-ca") == 0) {
       a++;
-      string pub = string(argv[a]);
-      bool isComp;
-      Point p = secp->ParsePublicKeyHex(pub,isComp);
-      printf("Addr (P2PKH): %s\n",secp->GetAddress(P2PKH,isComp,p).c_str());
-      printf("Addr (P2SH): %s\n",secp->GetAddress(P2SH,isComp,p).c_str());
-      printf("Addr (BECH32): %s\n",secp->GetAddress(BECH32,isComp,p).c_str());
-      exit(0);
+      caPub = string(argv[a]);
+      a++;
     } else if (strcmp(argv[a], "-cp") == 0) {
       a++;
-      string priv = string(argv[a]);
-      Int k;
-      bool isComp = true;
-      if(priv[0]=='6' || priv[0] == 'T') {
-        k = secp->DecodePrivateKey((char *)priv.c_str(),&isComp);
-      } else {
-        k.SetBase16(argv[a]);
-      }
-      Point p = secp->ComputePublicKey(&k);
-      printf("PrivAddr: p2pkh:%s\n",secp->GetPrivAddress(isComp,k).c_str());
-      printf("PubKey: %s\n",secp->GetPublicKeyHex(isComp,p).c_str());
-      printf("Addr (P2PKH): %s\n", secp->GetAddress(P2PKH,isComp,p).c_str());
-      printf("Addr (P2SH): %s\n", secp->GetAddress(P2SH,isComp,p).c_str());
-      printf("Addr (BECH32): %s\n", secp->GetAddress(BECH32,isComp,p).c_str());
-      exit(0);
+      cpPriv = string(argv[a]);
+      a++;
     } else if (strcmp(argv[a], "-rp") == 0) {
       a++;
-      string priv = string(argv[a]);
+      rpPriv = string(argv[a]);
       a++;
-      string file = string(argv[a]);
+      rpFile = string(argv[a]);
       a++;
-      reconstructAdd(secp,file,outputFile,priv);
-      exit(0);
     } else if (strcmp(argv[a], "-u") == 0) {
       searchMode = SEARCH_UNCOMPRESSED;
       a++;
@@ -529,6 +501,19 @@ int main(int argc, char* argv[]) {
       a++;
       rekey = (uint64_t)getInt("rekey", argv[a]);
       a++;
+    } else if (strcmp(argv[a], "-coin") == 0) {
+      a++;
+      if (strcmp(argv[a], "btc") == 0 || strcmp(argv[a], "BTC") == 0) {
+        coinType = COIN_BTC;
+        coinSpecified = true;
+      } else if (strcmp(argv[a], "ltc") == 0 || strcmp(argv[a], "LTC") == 0) {
+        coinType = COIN_LTC;
+        coinSpecified = true;
+      } else {
+        printf("Invalid coin \"%s\" (use btc or ltc)\n", argv[a]);
+        exit(-1);
+      }
+      a++;
     } else if (strcmp(argv[a], "-h") == 0) {
       printUsage();
     } else if (a == argc - 1) {
@@ -541,7 +526,74 @@ int main(int argc, char* argv[]) {
 
   }
 
-  printf("LTCVanitySearch v" RELEASE "\n");
+  if (!coinSpecified && prefix.size() > 0) {
+    coinType = DetectCoinFromPrefix(prefix[0].c_str());
+  }
+  SetCoin(coinType);
+
+  // Init SecpK1
+  Secp256K1 *secp = new Secp256K1();
+  secp->Init();
+
+  printf("VanitySearch v" RELEASE " [%s mode]\n", coinConfig.name);
+
+  if (doCheck) {
+    Int::Check();
+    secp->Check();
+#ifdef WITHGPU
+    if (gridSize.size() == 0) {
+      gridSize.push_back(-1);
+      gridSize.push_back(128);
+    }
+    GPUEngine g(gridSize[0],gridSize[1],gpuId[0],maxFound,false);
+    g.SetCoinVersion(coinConfig.p2pkhVersion, coinConfig.p2shVersion);
+    g.SetSearchMode(searchMode);
+    g.Check(secp);
+#else
+    printf("GPU code not compiled, use -DWITHGPU when compiling.\n");
+#endif
+    exit(0);
+  }
+
+  if (doKP) {
+    generateKeyPair(secp,seed,searchMode,paranoiacSeed);
+    exit(0);
+  }
+
+  if (spPub.length() > 0) {
+    startPuKey = secp->ParsePublicKeyHex(spPub, startPubKeyCompressed);
+  }
+
+  if (caPub.length() > 0) {
+    bool isComp;
+    Point p = secp->ParsePublicKeyHex(caPub,isComp);
+    printf("Addr (P2PKH): %s\n",secp->GetAddress(P2PKH,isComp,p).c_str());
+    printf("Addr (P2SH): %s\n",secp->GetAddress(P2SH,isComp,p).c_str());
+    printf("Addr (BECH32): %s\n",secp->GetAddress(BECH32,isComp,p).c_str());
+    exit(0);
+  }
+
+  if (cpPriv.length() > 0) {
+    Int k;
+    bool isComp = true;
+    if(cpPriv[0]==coinConfig.wifUncompChar || strchr(coinConfig.wifCompChars, cpPriv[0])) {
+      k = secp->DecodePrivateKey((char *)cpPriv.c_str(),&isComp);
+    } else {
+      k.SetBase16((char *)cpPriv.c_str());
+    }
+    Point p = secp->ComputePublicKey(&k);
+    printf("PrivAddr: p2pkh:%s\n",secp->GetPrivAddress(isComp,k).c_str());
+    printf("PubKey: %s\n",secp->GetPublicKeyHex(isComp,p).c_str());
+    printf("Addr (P2PKH): %s\n", secp->GetAddress(P2PKH,isComp,p).c_str());
+    printf("Addr (P2SH): %s\n", secp->GetAddress(P2SH,isComp,p).c_str());
+    printf("Addr (BECH32): %s\n", secp->GetAddress(BECH32,isComp,p).c_str());
+    exit(0);
+  }
+
+  if (rpPriv.length() > 0) {
+    reconstructAdd(secp,rpFile,outputFile,rpPriv);
+    exit(0);
+  }
 
   if(gridSize.size()==0) {
     for (int i = 0; i < gpuId.size(); i++) {

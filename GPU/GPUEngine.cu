@@ -330,6 +330,15 @@ void GPUEngine::PrintCudaInfo() {
 
 }
 
+void GPUEngine::SetCoinVersion(uint8_t p2pkh, uint8_t p2sh) {
+  cudaMemcpyToSymbol(d_p2pkhVersion, &p2pkh, sizeof(uint8_t));
+  cudaMemcpyToSymbol(d_p2shVersion, &p2sh, sizeof(uint8_t));
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    printf("GPUEngine: SetCoinVersion: %s\n", cudaGetErrorString(err));
+  }
+}
+
 GPUEngine::~GPUEngine() {
 
   cudaFree(inputKey);

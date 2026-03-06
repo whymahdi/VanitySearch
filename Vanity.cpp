@@ -18,6 +18,7 @@
 #include "Vanity.h"
 #include "Base58.h"
 #include "Bech32.h"
+#include "Coin.h"
 #include "hash/sha256.h"
 #include "hash/sha512.h"
 #include "IntGroup.h"
@@ -233,22 +234,19 @@ VanitySearch::VanitySearch(Secp256K1 *secp, vector<std::string> &inputPrefixes,s
   } else {
 
     // Wild card search
-    switch (inputPrefixes[0].data()[0]) {
-
-    case 'L':
-      searchType = P2PKH;
-      break;
-    case 'M':
-      searchType = P2SH;
-      break;
-    case 'l':
-      searchType = BECH32;
-      break;
-
-    default:
-      printf("Invalid start character L, M or l (ltc1), expected");
-      exit(1);
-
+    {
+      char fc = inputPrefixes[0].data()[0];
+      if (fc == coinConfig.p2pkhChar)
+        searchType = P2PKH;
+      else if (fc == coinConfig.p2shChar)
+        searchType = P2SH;
+      else if (fc == coinConfig.bech32Char)
+        searchType = BECH32;
+      else {
+        printf("Invalid start character (expected %c, %c or %c (%s1))\n",
+               coinConfig.p2pkhChar, coinConfig.p2shChar, coinConfig.bech32Char, coinConfig.bech32Hrp);
+        exit(1);
+      }
     }
 
     string searchInfo = string(searchModes[searchMode]) + (startPubKeySpecified ? ", with public key" : "");
@@ -352,22 +350,24 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
   int aType = -1;
 
 
-  switch (prefix.data()[0]) {
-  case 'L':
-    aType = P2PKH;
-    break;
-  case 'M':
-    aType = P2SH;
-    break;
-  case 'l':
-    std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
-    if(strncmp(prefix.c_str(), "ltc1q", 5) == 0)
-      aType = BECH32;
-    break;
+  {
+    char fc = prefix.data()[0];
+    if (fc == coinConfig.p2pkhChar)
+      aType = P2PKH;
+    else if (fc == coinConfig.p2shChar)
+      aType = P2SH;
+    else if (fc == coinConfig.bech32Char) {
+      std::transform(prefix.begin(), prefix.end(), prefix.begin(), ::tolower);
+      char bech32Prefix[16];
+      snprintf(bech32Prefix, sizeof(bech32Prefix), "%s1q", coinConfig.bech32Hrp);
+      if(strncmp(prefix.c_str(), bech32Prefix, coinConfig.bech32PrefixLen) == 0)
+        aType = BECH32;
+    }
   }
 
   if (aType==-1) {
-    printf("Ignoring prefix \"%s\" (must start with L or M or ltc1q)\n", prefix.c_str());
+    printf("Ignoring prefix \"%s\" (must start with %c or %c or %s1q)\n", prefix.c_str(),
+           coinConfig.p2pkhChar, coinConfig.p2shChar, coinConfig.bech32Hrp);
     return false;
   }
 
@@ -383,7 +383,7 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
     uint8_t witprog[40];
     size_t witprog_len;
     int witver;
-    const char* hrp = "ltc";
+    const char* hrp = coinConfig.bech32Hrp;
 
     int ret = segwit_addr_decode(&witver, witprog, &witprog_len, hrp, prefix.c_str());
 
@@ -415,14 +415,14 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
     uint8_t data[64];
     memset(data,0,64);
     size_t data_length;
-    if(!bech32_decode_nocheck(data,&data_length,prefix.c_str()+5)) {
+    if(!bech32_decode_nocheck(data,&data_length,prefix.c_str()+coinConfig.bech32PrefixLen)) {
       printf("Ignoring prefix \"%s\" (Only \"023456789acdefghjklmnpqrstuvwxyz\" allowed)\n", prefix.c_str());
       return false;
     }
 
     // Difficulty
     it->sPrefix = *(prefix_t *)data;
-    it->difficulty = pow(2, 5*(prefix.length()-5));
+    it->difficulty = pow(2, 5*(prefix.length()-coinConfig.bech32PrefixLen));
     it->isFull = false;
     it->lPrefix = 0;
     it->prefix = (char *)prefix.c_str();
@@ -490,9 +490,9 @@ bool VanitySearch::initPrefix(std::string &prefix,PREFIX_ITEM *it) {
     }
 
     if (searchType == P2SH) {
-      if (result.data()[0] != 0x32) {
+      if (result.data()[0] != coinConfig.p2shVersion) {
         if(caseSensitive)
-          printf("Ignoring prefix \"%s\" (Unreachable prefix for Litecoin P2SH)\n", prefix.c_str());
+          printf("Ignoring prefix \"%s\" (Unreachable prefix for %s P2SH)\n", prefix.c_str(), coinConfig.name);
         return false;
       }
     }
@@ -1523,6 +1523,7 @@ void VanitySearch::FindKeyGPU(TH_PARAM *ph) {
 
   getGPUStartingKeys(thId, g.GetGroupSize(), nbThread, keys, p);
 
+  g.SetCoinVersion(coinConfig.p2pkhVersion, coinConfig.p2shVersion);
   g.SetSearchMode(searchMode);
   g.SetSearchType(searchType);
   if (onlyFull) {
